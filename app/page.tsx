@@ -11,14 +11,14 @@ export default function LandingPage() {
               Index111
             </Link>
             <nav className="flex items-center gap-6">
-              <Link href="/pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900">
-                Pricing
+              <Link href="/dashboard" className="text-sm font-medium text-slate-600 hover:text-slate-900">
+                Dashboard
               </Link>
               <Link
-                href="/auth/signin"
+                href="/dashboard"
                 className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
               >
-                Sign In
+                Enter App
               </Link>
             </nav>
           </div>
@@ -42,14 +42,14 @@ export default function LandingPage() {
           </p>
           <div className="mt-10 flex items-center justify-center gap-4">
             <Link
-              href="/auth/signin"
+              href="/dashboard"
               className="px-8 py-4 bg-emerald-600 text-white text-lg font-semibold rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
             >
-              Index My Pages Now
+              Try It Now
             </Link>
           </div>
           <p className="mt-4 text-sm text-slate-400">
-            Free plan: 1 site, 20 URLs/day
+            Test mode — no login required
           </p>
         </div>
       </section>
@@ -94,7 +94,7 @@ export default function LandingPage() {
               description="For personal blogs and side projects"
               features={["1 site", "20 URLs/day", "Auto-submit", "Basic stats"]}
               cta="Get Started"
-              ctaLink="/auth/signin"
+              ctaLink="/dashboard"
               highlighted={false}
             />
             <PricingCard
@@ -104,7 +104,7 @@ export default function LandingPage() {
               description="For growing businesses and agencies"
               features={["10 sites", "200 URLs/day", "Auto-submit", "Advanced analytics", "Priority support"]}
               cta="Start Pro Trial"
-              ctaLink="/auth/signin"
+              ctaLink="/dashboard"
               highlighted={true}
             />
             <PricingCard
@@ -153,8 +153,8 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="text-lg font-bold text-white">Index111</div>
             <div className="flex gap-6 text-sm">
-              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
-              <Link href="/auth/signin" className="hover:text-white transition-colors">Sign In</Link>
+              <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
+              <Link href="/sites" className="hover:text-white transition-colors">Sites</Link>
             </div>
             <div className="text-sm">Built with care for website owners</div>
           </div>

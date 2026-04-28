@@ -104,9 +104,9 @@ export default async function DashboardPage() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Onboarding */}
+        {/* Test mode banner */}
         {!stats.hasGoogleToken && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
             <div className="flex items-center gap-3">
               <span className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,16 +114,10 @@ export default async function DashboardPage() {
                 </svg>
               </span>
               <div>
-                <p className="text-sm font-medium text-amber-900">Connect Google Search Console</p>
-                <p className="text-sm text-amber-700">Sign out and sign back in to grant indexing permissions.</p>
+                <p className="text-sm font-medium text-amber-900">Test Mode — Google Search Console not connected</p>
+                <p className="text-sm text-amber-700">URL submission actions will simulate responses. Connect a real Google account in production.</p>
               </div>
             </div>
-            <Link
-              href="/auth/signin"
-              className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 transition-colors"
-            >
-              Connect
-            </Link>
           </div>
         )}
 

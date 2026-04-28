@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { signOut } from "next-auth/react"
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -38,12 +37,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </nav>
             </div>
             <div className="flex items-center gap-4">
-              <button
-                onClick={() => signOut({ callbackUrl: "/" })}
+              <span className="text-sm text-slate-400">Test Mode</span>
+              <Link
+                href="/"
                 className="text-sm text-slate-500 hover:text-slate-900 transition-colors"
               >
-                Sign Out
-              </button>
+                Exit
+              </Link>
             </div>
           </div>
         </div>
