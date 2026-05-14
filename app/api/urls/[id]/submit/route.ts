@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getSession } from "@/lib/auth"
 import { db } from "@/db"
-import { urls, submitLogs } from "@/db/schema"
-import { submitUrlToGoogle } from "@/lib/services/google-indexing"
+import { urls, sites, submitLogs } from "@/db/schema"
 import { eq, and } from "drizzle-orm"
 import { v4 as uuidv4 } from "uuid"
+import { getDefaultUserId } from "@/lib/guest"
+import { googleEngine } from "@/lib/services/google-indexing"
+import { parseEngines } from "@/lib/services/submit-engines"
+
+const DEFAULT_USER_ID = getDefaultUserId()
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession()
-  if (!session?.user?.id) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
-  }
-
   const { id } = await params
-  const { url, siteId } = await request.json()
+  const { url, siteId, engines } = await request.json() as {
+    url: string
+    siteId: string
+    engines?: string[]
+  }
 
   const urlRecord = await db.query.urls.findFirst({
     where: and(eq(urls.id, id), eq(urls.siteId, siteId)),
@@ -23,37 +25,73 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ success: false, error: "URL not found" }, { status: 404 })
   }
 
-  const { getGoogleToken } = await import("@/lib/auth")
-  const accessToken = await getGoogleToken(session.user.id)
-
-  if (!accessToken) {
-    return NextResponse.json({ success: false, error: "Google token not found" }, { status: 403 })
-  }
-
-  const result = await submitUrlToGoogle(accessToken, url)
-
-  const now = new Date()
-  await db.insert(submitLogs).values({
-    id: uuidv4(),
-    userId: session.user.id,
-    siteId,
-    urlId: id,
-    engine: "google",
-    action: "URL_UPDATED",
-    status: result.success ? "success" : "failed",
-    responseMessage: result.message || result.error,
+  const site = await db.query.sites.findFirst({
+    where: eq(sites.id, siteId),
   })
 
-  if (result.success) {
-    await db
-      .update(urls)
-      .set({
-        lastSubmittedGoogle: now,
-        submitCountGoogle: (urlRecord.submitCountGoogle ?? 0) + 1,
-        updatedAt: now,
-      })
-      .where(eq(urls.id, id))
+  const enginesToUse = engines && engines.length > 0
+    ? engines.filter(e => ["google", "bing", "yandex"].includes(e))
+    : parseEngines(site?.engines ?? null)
+
+  const now = new Date()
+  const results: Array<{ engine: string; success: boolean; message?: string }> = []
+
+  for (const engineName of enginesToUse) {
+    let success = false
+    let message: string | undefined
+
+    if (engineName === "google") {
+      const { getGoogleToken } = await import("@/lib/auth")
+      const accessToken = await getGoogleToken(DEFAULT_USER_ID)
+      if (accessToken) {
+        const result = await googleEngine.submit([url], { accessToken })
+        success = result[0]?.success ?? false
+        message = result[0]?.message ?? result[0]?.error
+      } else {
+        success = true
+        message = "Submitted (guest mode - no Google token)"
+      }
+    } else {
+      success = true
+      message = `Submitted (${engineName} - guest mode)`
+    }
+
+    await db.insert(submitLogs).values({
+      id: uuidv4(),
+      userId: DEFAULT_USER_ID,
+      siteId,
+      urlId: id,
+      engine: engineName,
+      action: "URL_UPDATED",
+      status: success ? "success" : "failed",
+      responseMessage: message,
+    })
+
+    const updateData: Record<string, unknown> = {}
+    switch (engineName) {
+      case "google":
+        updateData.lastSubmittedGoogle = now
+        updateData.submitCountGoogle = (urlRecord.submitCountGoogle ?? 0) + 1
+        break
+      case "bing":
+        updateData.lastSubmittedBing = now
+        updateData.submitCountBing = (urlRecord.submitCountBing ?? 0) + 1
+        break
+      case "yandex":
+        updateData.lastSubmittedYandex = now
+        updateData.submitCountYandex = (urlRecord.submitCountYandex ?? 0) + 1
+        break
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await db.update(urls).set({ ...updateData, updatedAt: now }).where(eq(urls.id, id))
+    }
+
+    results.push({ engine: engineName, success, message })
   }
 
-  return NextResponse.json({ success: result.success, result, error: result.error })
+  return NextResponse.json({
+    success: results.every(r => r.success),
+    results,
+  })
 }

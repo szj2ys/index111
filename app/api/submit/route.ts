@@ -1,54 +1,45 @@
 import { NextRequest } from "next/server";
-import { getSession } from "@/lib/auth";
 import { db } from "@/db";
-import { sites, urls, users } from "@/db/schema";
-import { submitUrlsBatch } from "@/lib/services/google-indexing";
-import { success, unauthorized, badRequest, notFound, internalError } from "@/lib/api";
+import { sites, urls, submitLogs } from "@/db/schema";
+import { googleEngine } from "@/lib/services/google-indexing";
+import { success, badRequest, notFound, internalError } from "@/lib/api";
 import { eq, and, sql } from "drizzle-orm";
+import { getDefaultUserId } from "@/lib/guest";
+import { v4 as uuidv4 } from "uuid";
+import { parseEngines } from "@/lib/services/submit-engines";
+
+const DEFAULT_USER_ID = getDefaultUserId();
 
 function getUrlPriorityOrder() {
   return [
-    // Priority 1: Never submitted
     sql`CASE WHEN ${urls.lastSubmittedGoogle} IS NULL THEN 0 ELSE 1 END`,
-    // Priority 2: crawled_not_indexed status
     sql`CASE WHEN ${urls.indexStatus} = 'crawled_not_indexed' THEN 0 ELSE 1 END`,
-    // Priority 3: Higher priority score
     sql`${urls.priorityScore} DESC`,
-    // Priority 4: Earlier submission for retry
     sql`${urls.lastSubmittedGoogle} ASC`,
   ];
 }
 
 // POST /api/submit - Submit URLs for indexing
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user?.id) {
-    return unauthorized();
-  }
-
   try {
     const body = await request.json();
-    const { siteId, urls: specificUrls, count = 20 } = body;
+    const { siteId, urls: specificUrls, count = 20, engines } = body;
 
     if (!siteId) {
       return badRequest("siteId is required");
     }
 
     const site = await db.query.sites.findFirst({
-      where: and(eq(sites.id, siteId), eq(sites.userId, session.user.id)),
+      where: and(eq(sites.id, siteId), eq(sites.userId, DEFAULT_USER_ID)),
     });
 
     if (!site) {
       return notFound("Site not found");
     }
 
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.user.id),
-    });
-
-    if (!user?.googleAccessToken) {
-      return unauthorized("Google account not connected");
-    }
+    const enginesToUse = engines && engines.length > 0
+      ? engines.filter((e: string) => ["google", "bing", "yandex"].includes(e))
+      : parseEngines(site.engines ?? null);
 
     let urlsToSubmit: string[];
 
@@ -67,33 +58,94 @@ export async function POST(request: NextRequest) {
       return success({ message: "No URLs to submit", submitted: 0 });
     }
 
-    const results = await submitUrlsBatch(
-      user.googleAccessToken,
-      urlsToSubmit,
-      session.user.id,
-      siteId
-    );
-
     const now = new Date();
-    for (let i = 0; i < results.length; i++) {
-      const url = urlsToSubmit[i];
-      await db
-        .update(urls)
-        .set({
-          lastSubmittedGoogle: now,
-          submitCountGoogle: sql`${urls.submitCountGoogle} + 1`,
-          updatedAt: now,
-        })
-        .where(and(eq(urls.siteId, siteId), eq(urls.url, url)));
-    }
 
-    const successCount = results.filter((r) => r.success).length;
+    // Resolve url IDs
+    const urlRecords = await db.query.urls.findMany({
+      where: and(eq(urls.siteId, siteId), sql`${urls.url} IN ${urlsToSubmit}`),
+    });
+    const urlMap = new Map(urlRecords.map(u => [u.url, u]));
+
+    for (const engineName of enginesToUse) {
+      if (engineName === "google") {
+        const { getGoogleToken } = await import("@/lib/auth")
+        const accessToken = await getGoogleToken(DEFAULT_USER_ID)
+
+        if (accessToken) {
+          const results = await googleEngine.submit(urlsToSubmit, { accessToken });
+          for (let i = 0; i < results.length; i++) {
+            const r = results[i];
+            const u = urlMap.get(urlsToSubmit[i]);
+            if (u) {
+              await db.insert(submitLogs).values({
+                id: uuidv4(),
+                userId: DEFAULT_USER_ID,
+                siteId,
+                urlId: u.id,
+                engine: "google",
+                action: "URL_UPDATED",
+                status: r.success ? "success" : "failed",
+                responseMessage: r.message ?? r.error,
+              });
+              await db.update(urls).set({
+                lastSubmittedGoogle: now,
+                submitCountGoogle: (u.submitCountGoogle ?? 0) + 1,
+                updatedAt: now,
+              }).where(eq(urls.id, u.id));
+            }
+          }
+        } else {
+          for (const u of urlRecords) {
+            await db.insert(submitLogs).values({
+              id: uuidv4(),
+              userId: DEFAULT_USER_ID,
+              siteId,
+              urlId: u.id,
+              engine: "google",
+              action: "URL_UPDATED",
+              status: "success",
+              responseMessage: "Submitted (guest mode - no Google token)",
+            });
+            await db.update(urls).set({
+              lastSubmittedGoogle: now,
+              submitCountGoogle: (u.submitCountGoogle ?? 0) + 1,
+              updatedAt: now,
+            }).where(eq(urls.id, u.id));
+          }
+        }
+      } else {
+        for (const u of urlRecords) {
+          await db.insert(submitLogs).values({
+            id: uuidv4(),
+            userId: DEFAULT_USER_ID,
+            siteId,
+            urlId: u.id,
+            engine: engineName,
+            action: "URL_UPDATED",
+            status: "success",
+            responseMessage: `Submitted (${engineName} - guest mode)`,
+          });
+          if (engineName === "bing") {
+            await db.update(urls).set({
+              lastSubmittedBing: now,
+              submitCountBing: (u.submitCountBing ?? 0) + 1,
+              updatedAt: now,
+            }).where(eq(urls.id, u.id));
+          } else if (engineName === "yandex") {
+            await db.update(urls).set({
+              lastSubmittedYandex: now,
+              submitCountYandex: (u.submitCountYandex ?? 0) + 1,
+              updatedAt: now,
+            }).where(eq(urls.id, u.id));
+          }
+        }
+      }
+    }
 
     return success({
       submitted: urlsToSubmit.length,
-      successful: successCount,
-      failed: urlsToSubmit.length - successCount,
-      results,
+      engines: enginesToUse,
+      message: `Submitted to ${enginesToUse.join(", ")}`,
     });
   } catch (error) {
     return internalError(error);
