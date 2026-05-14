@@ -2,15 +2,9 @@ import { google } from "googleapis";
 import { db } from "@/db";
 import { submitLogs } from "@/db/schema";
 import { v4 as uuidv4 } from "uuid";
+import type { SearchEngine, SubmitResult, EngineConfig } from "./search-engine";
 
 const indexing = google.indexing({ version: "v3" });
-
-export interface SubmitResult {
-  success: boolean;
-  url: string;
-  message?: string;
-  error?: string;
-}
 
 interface IndexingMetadata {
   urlNotificationMetadata?: {
@@ -96,3 +90,19 @@ export async function getUrlIndexingStatus(
     return { error: message };
   }
 }
+
+export const googleEngine: SearchEngine = {
+  name: "google",
+  async submit(urls: string[], config: EngineConfig): Promise<SubmitResult[]> {
+    const accessToken = config.accessToken;
+    if (!accessToken) {
+      throw new Error("Google engine requires accessToken in config");
+    }
+    const results: SubmitResult[] = [];
+    for (const url of urls) {
+      const result = await submitUrlToGoogle(accessToken, url, "URL_UPDATED");
+      results.push(result);
+    }
+    return results;
+  },
+};
