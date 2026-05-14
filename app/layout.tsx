@@ -8,8 +8,8 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Index111 - Get Indexed by Google in Hours",
-  description: "Automate URL submission to Google Search Console. Connect, sync, and submit your sitemap URLs automatically.",
+  title: "Index111 - Get Indexed by Google in Hours, Not Days",
+  description: "Automate URL submission to Google, Bing, ChatGPT and other search engines. Connect your site, sync your sitemap, and watch your pages get indexed faster.",
 };
 
 export default function RootLayout({
@@ -19,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full font-sans">{children}</body>
     </html>
   );
 }
