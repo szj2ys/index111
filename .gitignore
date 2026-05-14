@@ -39,3 +39,21 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# agent/IDE configurations
+.agents
+.claude
+.codebuddy
+.continue
+.factory
+.iflow
+.kiro
+.tabnine
+.trae
+.windsurf
+
+# project specific
+.scratch
+sqlite.db
+sqlite.db-*
+skills-lock.json
