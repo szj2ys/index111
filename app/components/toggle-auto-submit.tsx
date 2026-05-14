@@ -25,13 +25,13 @@ export function ToggleAutoSubmit({ siteId, enabled }: { siteId: string; enabled:
     <button
       onClick={toggle}
       disabled={isLoading}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-        isOn ? "bg-emerald-500" : "bg-slate-300"
-      } ${isLoading ? "opacity-50" : ""}`}
+      className={`relative inline-flex h-[22px] w-10 items-center rounded-full transition-all duration-300 ${
+        isOn ? "bg-[#22c55e]" : "bg-black/15"
+      } ${isLoading ? "opacity-50" : "hover:opacity-90"}`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          isOn ? "translate-x-6" : "translate-x-1"
+        className={`inline-block h-[16px] w-[16px] transform rounded-full bg-white transition-all duration-300 shadow-sm ${
+          isOn ? "translate-x-[19px]" : "translate-x-[3px]"
         }`}
       />
     </button>
