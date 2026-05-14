@@ -1,13 +1,15 @@
 import { NextRequest } from "next/server";
-import { getSession } from "@/lib/auth";
 import { db } from "@/db";
 import { sites } from "@/db/schema";
-import { success, unauthorized, notFound, internalError } from "@/lib/api";
+import { success, notFound, internalError } from "@/lib/api";
 import { eq, and } from "drizzle-orm";
+import { getDefaultUserId } from "@/lib/guest";
 
-async function getOwnedSite(userId: string, siteId: string) {
+const DEFAULT_USER_ID = getDefaultUserId();
+
+async function getOwnedSite(siteId: string) {
   return db.query.sites.findFirst({
-    where: and(eq(sites.id, siteId), eq(sites.userId, userId)),
+    where: and(eq(sites.id, siteId), eq(sites.userId, DEFAULT_USER_ID)),
     with: { urls: true },
   });
 }
@@ -17,14 +19,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session?.user?.id) {
-    return unauthorized();
-  }
-
   try {
     const { id } = await params;
-    const site = await getOwnedSite(session.user.id, id);
+    const site = await getOwnedSite(id);
 
     if (!site) {
       return notFound("Site not found");
@@ -41,14 +38,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session?.user?.id) {
-    return unauthorized();
-  }
-
   try {
     const { id } = await params;
-    const site = await getOwnedSite(session.user.id, id);
+    const site = await getOwnedSite(id);
 
     if (!site) {
       return notFound("Site not found");
@@ -81,14 +73,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session?.user?.id) {
-    return unauthorized();
-  }
-
   try {
     const { id } = await params;
-    const site = await getOwnedSite(session.user.id, id);
+    const site = await getOwnedSite(id);
 
     if (!site) {
       return notFound("Site not found");

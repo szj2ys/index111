@@ -1,21 +1,6 @@
-export interface Session {
-  user: {
-    id: string
-    email: string
-    name?: string | null
-    image?: string | null
-  }
-}
+import { auth } from "@/auth"
 
-export async function getSession(): Promise<Session> {
-  return {
-    user: {
-      id: "test-user-001",
-      email: "test@index111.app",
-      name: "Test User",
-    },
-  }
-}
+export { signIn, signOut } from "@/auth"
 
 export async function getGoogleToken(userId: string) {
   const { db } = await import("@/db")
@@ -27,4 +12,8 @@ export async function getGoogleToken(userId: string) {
   })
 
   return user?.googleAccessToken || null
+}
+
+export async function getSession() {
+  return await auth()
 }

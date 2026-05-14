@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
 import { db } from "@/db";
 import { sites, urls, users } from "@/db/schema";
 import { fetchAllSitemapUrls } from "@/lib/services/sitemap";
-import { success, unauthorized, badRequest, internalError } from "@/lib/api";
+import { success, badRequest, internalError } from "@/lib/api";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
+import { getDefaultUserId } from "@/lib/guest";
+
+const DEFAULT_USER_ID = getDefaultUserId();
 
 // GET /api/sites - List all sites for the current user
 export async function GET(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user?.id) {
-    return unauthorized();
-  }
-
   try {
     const userSites = await db.query.sites.findMany({
-      where: eq(sites.userId, session.user.id),
+      where: eq(sites.userId, DEFAULT_USER_ID),
       with: { urls: true },
     });
 
@@ -84,11 +81,6 @@ function calculatePriorityScore(entry: { priority?: string; changefreq?: string;
 
 // POST /api/sites - Add a new site
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user?.id) {
-    return unauthorized();
-  }
-
   try {
     const body = await request.json();
     const { url } = body;
@@ -100,16 +92,18 @@ export async function POST(request: NextRequest) {
     const { domain, siteUrl } = normalizeUrl(url);
 
     const user = await db.query.users.findFirst({
-      where: eq(users.id, session.user.id),
+      where: eq(users.id, DEFAULT_USER_ID),
     });
+
+    const maxSites = user?.maxSites ?? 5;
 
     const existingSites = await db.query.sites.findMany({
-      where: eq(sites.userId, session.user.id),
+      where: eq(sites.userId, DEFAULT_USER_ID),
     });
 
-    if (existingSites.length >= (user?.maxSites || 1)) {
+    if (existingSites.length >= maxSites) {
       return NextResponse.json(
-        { success: false, error: { code: "QUOTA_EXCEEDED", message: "Site limit reached for your plan" } },
+        { success: false, error: { code: "QUOTA_EXCEEDED", message: `Site limit reached (max ${maxSites})` } },
         { status: 403 }
       );
     }
@@ -120,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     await db.insert(sites).values({
       id: siteId,
-      userId: session.user.id,
+      userId: DEFAULT_USER_ID,
       domain,
       siteUrl,
       sitemapUrl: sitemapUrl || null,
@@ -132,7 +126,7 @@ export async function POST(request: NextRequest) {
     if (sitemapUrl) {
       try {
         const sitemapUrls = await fetchAllSitemapUrls(sitemapUrl);
-        const maxUrls = user?.maxUrlsPerSite || 1000;
+        const maxUrls = user?.maxUrlsPerSite ?? 1000;
 
         const urlsToInsert = sitemapUrls.slice(0, maxUrls).map((u) => ({
           id: uuidv4(),
